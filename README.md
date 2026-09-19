@@ -81,7 +81,7 @@ Install Node.js 22.12 or newer, open a terminal in this project folder, and run:
 npm ci
 ```
 
-For a new checkout, copy `.env.example` to `.env` and replace the placeholder URL and key. If `.env` already exists, retain its configuration and edit only the values you need to change. This capture-time upgrade does not require configuration changes.
+For a new checkout, create `.env` with the two variables below and replace the placeholder URL and key. If `.env` already exists, retain its configuration and edit only the values you need to change. This capture-time upgrade does not require configuration changes.
 
 ```dotenv
 VITE_SUPABASE_URL=https://your-project.supabase.co
@@ -109,7 +109,28 @@ npm run preview
 
 `npm run build` creates `dist/`. The preview command serves this built bundle locally; it is not needed on Cloudflare. Automated browser checks use mocked cloud responses and do not write to your configured Supabase project.
 
-## 3. Deploy to Cloudflare Pages
+## 3. Deploy to Cloudflare
+
+### Cloudflare Workers (the existing deployment)
+
+The included `wrangler.jsonc` publishes the built `dist/` directory as static assets. It tells Wrangler that this project is already configured, so `wrangler deploy` does not try to install a Vite plugin or rewrite `vite.config.ts`. See [Cloudflare's static assets configuration](https://developers.cloudflare.com/workers/static-assets/binding/) and [skipping automatic configuration](https://developers.cloudflare.com/workers/framework-guides/automatic-configuration/#skipping-automatic-configuration).
+
+1. Commit and push `wrangler.jsonc` at the repository root, alongside `package.json` and `package-lock.json`.
+2. In your Cloudflare Worker's build settings, use:
+
+   | Setting | Value |
+   | --- | --- |
+   | Worker name | `qr-data-manager` (must match `name` in `wrangler.jsonc`) |
+   | Root directory | Repository root, where `package.json` lives |
+   | Build command | `npm run build` |
+   | Deploy command | `npx wrangler deploy` |
+
+3. Under **Settings > Build > Build Variables and Secrets**, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` with the same URL and public key as your local `.env`. Worker runtime variables alone cannot configure this frontend; Vite embeds these values when the build runs. See [Cloudflare build settings](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/).
+4. Trigger a new build from the commit containing `wrangler.jsonc`. A retry of an older commit will still lack the configuration. Open the deployed `workers.dev` address on both devices once deployment succeeds.
+
+If the log says `Build command completed` followed by `Cannot modify Vite config: could not find a valid plugins array`, the app built successfully but Wrangler attempted automatic setup during deployment. Verify that the deployed commit includes `wrangler.jsonc` and that the build root is the directory containing it. No Vite configuration change is needed.
+
+### Cloudflare Pages (alternative hosting setup)
 
 1. Put this project folder in a GitHub or GitLab repository, including `package.json` and `package-lock.json`, and push it. Do not commit `.env` or `node_modules`.
 2. In Cloudflare, open **Workers & Pages > Create application > Pages > Connect to Git** and select the repository. Follow the [official Git integration guide](https://developers.cloudflare.com/pages/get-started/git-integration/).
