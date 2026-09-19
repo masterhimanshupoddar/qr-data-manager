@@ -30,6 +30,67 @@ test('at the scan instant even a future encoded date and different clock stay ex
   expect(result.currentTime).toBe('17:29:37');
 });
 
+test('accepts the exact single-digit-hour QR and preserves all other fields across the first interval', async ({ page }) => {
+  const results = await page.evaluate(async () => {
+    const { createLivePayload } = await import('/src/live-time.ts');
+    const source = 'F1080239Z2691818531842#2026-09-18 8:58:25# 1 x Assam Tea#570';
+    const scannedAt = '2026-09-18T11:59:37.123Z';
+    return [0, 14999, 15000].map(delta =>
+      createLivePayload(source, scannedAt, new Date(Date.parse(scannedAt) + delta)));
+  });
+  expect(results.map(value => value.text)).toEqual([
+    'F1080239Z2691818531842#2026-09-18 8:58:25# 1 x Assam Tea#570',
+    'F1080239Z2691818531842#2026-09-18 8:58:25# 1 x Assam Tea#570',
+    'F1080239Z2691818531842#2026-09-18 8:58:40# 1 x Assam Tea#570',
+  ]);
+  expect(results.map(value => value.originalTime)).toEqual(Array(3).fill('8:58:25'));
+  expect(results.map(value => value.originalTimestamp)).toEqual(Array(3).fill('2026-09-18 8:58:25'));
+  expect(results.map(value => value.qrTime)).toEqual(['8:58:25', '8:58:25', '8:58:40']);
+  expect(results.map(value => value.roundedElapsedSeconds)).toEqual([0, 0, 15]);
+});
+
+test('preserves hour padding and the suffix when the generated hour grows or wraps at midnight', async ({ page }) => {
+  const results = await page.evaluate(async () => {
+    const { createLivePayload } = await import('/src/live-time.ts');
+    const scannedAt = '2026-09-18T11:59:37Z';
+    const cases = [
+      { time: '08:58:25', delta: 15_000 },
+      { time: '9:59:55', delta: 15_000 },
+      { time: '8:59:55', delta: 54_015_000 },
+      { time: '08:59:55', delta: 54_015_000 },
+    ];
+    return cases.map(({ time, delta }) =>
+      createLivePayload(`prefix#2026-09-18 ${time}# 1 x Assam Tea#570`, scannedAt, new Date(Date.parse(scannedAt) + delta)).text);
+  });
+  expect(results).toEqual([
+    'prefix#2026-09-18 08:58:40# 1 x Assam Tea#570',
+    'prefix#2026-09-18 10:00:10# 1 x Assam Tea#570',
+    'prefix#2026-09-18 0:00:10# 1 x Assam Tea#570',
+    'prefix#2026-09-18 00:00:10# 1 x Assam Tea#570',
+  ]);
+});
+
+test('single-digit support still rejects malformed times and adjacent mixed-width timestamp fields', async ({ page }) => {
+  const errors = await page.evaluate(async () => {
+    const { createLivePayload } = await import('/src/live-time.ts');
+    const sources = [
+      '#2026-09-18 24:00:00#',
+      '#2026-09-18 008:58:25#',
+      '#2026-09-18 8:9:25#',
+      '#2026-09-18 8:58:5#',
+      '#2026-09-18 8:58:25#2026-09-18 08:58:25#',
+      '#2026-09-18 08:58:25#2026-09-18 8:58:25#',
+    ];
+    return sources.map(source => {
+      try { createLivePayload(source, '2026-09-18T11:59:37Z', new Date('2026-09-18T11:59:52Z')); return 'unexpected success'; }
+      catch (error) { return (error as Error).message; }
+    });
+  });
+  expect(errors[0]).toContain('invalid time');
+  for (const message of errors.slice(1, 4)) expect(message).toContain('No timestamp field');
+  for (const message of errors.slice(4)) expect(message).toContain('more than one');
+});
+
 test('0, 14999, 15000, and 15001 ms use exact intervals from the recorded millisecond', async ({ page }) => {
   const results = await page.evaluate(async () => {
     const { createLivePayload } = await import('/src/live-time.ts');

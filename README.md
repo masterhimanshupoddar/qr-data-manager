@@ -14,7 +14,7 @@ Only the generated QR changes as time passes. The original text, its saved scan 
 
 ## How the live time works
 
-The original text must contain exactly one `YYYY-MM-DD HH:mm:ss` field, delimited by `#` or the beginning/end of the text. For example:
+The original text must contain exactly one `YYYY-MM-DD H:mm:ss` or `YYYY-MM-DD HH:mm:ss` field, delimited by `#` or the beginning/end of the text. Hours may have one or two digits (`8:58:25` and `08:58:25` are both accepted); minutes and seconds require two digits. Generated QR text preserves the original hour padding style. For example:
 
 ```text
 B1008501Z2691616859851#2026-09-16 16:09:12# 1 x Filter Coffee#598
@@ -51,7 +51,7 @@ Capture happens at successful decoding, before any network save delay. A failed 
 
 Every refresh recomputes elapsed time from the saved capture and current clock. It does not repeatedly add 15 seconds, so timer delays do not accumulate. Browsers can delay timers in background tabs or while a device sleeps. Returning to the page recalculates the current interval. A downloaded PNG is a snapshot and does not update after download.
 
-Identifiers, spaces, punctuation, newlines, and all original text outside `HH:mm:ss` are preserved exactly. Missing, invalid, or multiple timestamp fields produce a readable error instead of changing unrelated text. The original QR text can still be saved even if it cannot produce a live time QR. This is a text QR workflow; it does not promise lossless conversion of arbitrary binary QR payloads. The app does not append, trim, normalize, encrypt, or decrypt the contents.
+Identifiers, spaces, punctuation, newlines, and all original text outside the timestamp's clock value are preserved exactly. Missing, invalid, or multiple timestamp fields produce a readable error instead of changing unrelated text. The original QR text can still be saved even if it cannot produce a live time QR. This is a text QR workflow; it does not promise lossless conversion of arbitrary binary QR payloads. The app does not append, trim, normalize, encrypt, or decrypt the contents.
 
 Only the decoded original text and its capture instant are sent to Supabase. Image files, camera frames, and generated time updates stay in the browser. Uploaded images are limited to 20 MiB, 24 million pixels, and 16,384 pixels along either edge.
 
@@ -203,7 +203,7 @@ Expected results: `true, true, true, false, false, false, false`.
 - **Cloud save/load fails:** check internet access, a paused Supabase project, Data API settings, table permissions, and RLS policies. An on-screen decoded value is not saved until the save succeeds.
 - **No previous data:** scan and successfully save a QR on any device first. A fresh database starts empty.
 - **No QR detected:** use a sharp, well-lit image with the entire QR and white border visible. Supported uploads are JPG/JPEG, PNG, and WebP. If an image exceeds 20 MiB, 24 million pixels, or 16,384 pixels on either edge, export a smaller image with the QR still clearly legible.
-- **No live QR:** the original must contain exactly one valid `YYYY-MM-DD HH:mm:ss` field bounded by `#` or the text edges, and have a saved capture instant.
+- **No live QR:** the original must contain exactly one valid `YYYY-MM-DD H:mm:ss` or `YYYY-MM-DD HH:mm:ss` field bounded by `#` or the text edges, and have a saved capture instant.
 - **Clock mismatch:** the current system instant is before the saved actual scan instant. Check the scanning and viewing devices' clocks. The QR's embedded date does not cause this error, even when that date is in the future.
 - **Camera unavailable:** use HTTPS (the Pages URL) or localhost, allow browser camera permission, and close other apps using the camera. Phone access to an HTTP development server over the local network generally cannot use the camera; upload an image instead.
 - **Copy unavailable:** allow clipboard access and use HTTPS, or select and copy the displayed generated text manually.

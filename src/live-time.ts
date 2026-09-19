@@ -94,16 +94,16 @@ function parseScanTime(scannedAt: string | null): Date {
   return new Date(epoch);
 }
 
-function formatTime(seconds: number): string {
+function formatTime(seconds: number, hourWidth = 2): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   return [hours, minutes, seconds % 60]
-    .map((value) => String(value).padStart(2, "0"))
+    .map((value, index) => String(value).padStart(index === 0 ? hourWidth : 2, "0"))
     .join(":");
 }
 
 /**
- * Replace only HH:mm:ss in one # separated timestamp field. A field may also
+ * Replace only H:mm:ss or HH:mm:ss in one # separated timestamp field. A field may also
  * touch the start or end of the source. Never rewrite or normalize other text.
  *
  * The saved system time captured when decoding succeeded is the elapsed
@@ -125,16 +125,16 @@ export function createLivePayload(
   // The trailing delimiter is a lookahead so adjacent timestamp fields are
   // counted separately rather than sharing a consumed delimiter.
   const fields = [
-    ...source.matchAll(/(^|#)(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?=#|$)/g),
+    ...source.matchAll(/(^|#)(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}:\d{2})(?=#|$)/g),
   ];
   if (fields.length === 0) {
     throw new Error(
-      "No timestamp field was found. Scan a QR containing one YYYY-MM-DD HH:mm:ss field separated by # characters.",
+      "No timestamp field was found. Scan a QR containing one YYYY-MM-DD H:mm:ss or YYYY-MM-DD HH:mm:ss field separated by # characters.",
     );
   }
   if (fields.length !== 1) {
     throw new Error(
-      "This QR contains more than one timestamp field. Use a QR with exactly one YYYY-MM-DD HH:mm:ss field.",
+      "This QR contains more than one timestamp field. Use a QR with exactly one date and time field.",
     );
   }
 
@@ -152,7 +152,7 @@ export function createLivePayload(
   }
   if (hours > 23 || minutes > 59 || seconds > 59) {
     throw new Error(
-      "The timestamp contains an invalid time. Hours must be 00–23, and minutes and seconds must be 00–59.",
+      "The timestamp contains an invalid time. Hours must be 0–23, and minutes and seconds must be 00–59.",
     );
   }
   if (!Number.isFinite(now.getTime())) {
@@ -176,6 +176,7 @@ export function createLivePayload(
   const daySeconds = DAY_MS / 1000;
   const qrTime = formatTime(
     (originalSeconds + (roundedElapsedSeconds % daySeconds)) % daySeconds,
+    originalTime.indexOf(":"),
   );
   const currentSeconds =
     now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
@@ -183,7 +184,10 @@ export function createLivePayload(
   const timeStart = field.index! + field[1].length + 11;
 
   return {
-    text: source.slice(0, timeStart) + qrTime + source.slice(timeStart + 8),
+    text:
+      source.slice(0, timeStart) +
+      qrTime +
+      source.slice(timeStart + originalTime.length),
     originalTime,
     qrTime,
     currentTime,

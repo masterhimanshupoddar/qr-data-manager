@@ -117,6 +117,28 @@ test('uses actual system scan time rather than the QR timestamp or database save
   expect(cloud.writes).toBe(0);
 });
 
+test('uploads a single-digit-hour QR, advances it after 15 seconds, and restores it on reload', async ({ page, context }) => {
+  const original = 'F1080239Z2691818531842#2026-09-18 8:58:25# 1 x Assam Tea#570';
+  const updated = 'F1080239Z2691818531842#2026-09-18 8:58:40# 1 x Assam Tea#570';
+  const cloud = cloudMock();
+  await cloud.attach(context);
+  await page.goto('/');
+  await uploadQr(page, original);
+  await expect.poll(() => cloud.row.scanned_at).toBe(NOW_ISO);
+  await expectExactText(page, '#source-data', original);
+  await expectExactText(page, '#combined-data', original);
+  expect(await decodeGeneratedQr(page)).toBe(original);
+  await page.clock.runFor(15_000);
+  await expectExactText(page, '#combined-data', updated);
+  expect(await decodeGeneratedQr(page)).toBe(updated);
+  await page.reload();
+  await expectExactText(page, '#source-data', original);
+  await expectExactText(page, '#combined-data', updated);
+  expect(cloud.row.qr_data).toBe(original);
+  expect(cloud.row.scanned_at).toBe(NOW_ISO);
+  expect(cloud.writes).toBe(1);
+});
+
 test('uploads exact original text and captures the system instant, then downloads and copies the live QR', async ({ page, context }) => {
   const cloud = cloudMock();
   await cloud.attach(context);
